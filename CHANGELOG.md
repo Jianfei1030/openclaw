@@ -84,6 +84,7 @@ Docs: https://docs.openclaw.ai
 - Docker Compose: default missing config and workspace bind mounts to `${HOME:-/tmp}/.openclaw` so manual compose runs do not create invalid empty-source volume specs. (#64485) Thanks @jlapenna.
 - Agents/context engines: preserve the child agent's configured `agentDir` when subagent cleanup re-resolves a context engine, so `onSubagentEnded` hooks keep operating on the correct per-agent state. (#67243) Thanks @jarimustonen.
 - Channels/WhatsApp: restrict pairing verification replies to real inbound user content, preventing unsolicited prompts from receipts, typing indicators, presence updates, and other non-message Baileys upserts. Fixes #73797. (#73823) Thanks @hclsys.
+- Telegram/Agents: suppress failed mutating-tool warning payloads when an assistant error or explicit failed-action reply is already user-facing, while keeping warnings for successful or ambiguous replies. Fixes #39631 and #51065; supersedes #39636 and #39717. Thanks @Bartok9 and @Bortlesboat.
 
 ## 2026.4.27
 
