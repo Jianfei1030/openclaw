@@ -341,6 +341,45 @@ agent-scope, model-input, listAgentEntries imports in
 `src/tui/tui.ts:15`). Next step is to attach `--inspect` to the TUI
 process and capture the same kind of CDP stack dump we did for gateway.
 
+## 2026-05-01 — `loadInstalledPluginIndex` process-level memo (`installed-plugin-index.ts`)
+
+Same villain pattern as `bundled-plugin-metadata` from earlier today.
+`buildInstalledPluginIndex` calls `resolveInstalledPluginIndexRegistry`
+which scans plugin candidates and reads every manifest from disk.
+
+Prior-session investigation (recorded in handoff doc) measured **13–21
+calls per agent turn at 2–4 s each**: the embedded run pipeline asks for
+the installed-plugin index from many call sites
+(`normalizeProviderTransportWithPlugin`, system-prompt build,
+core-plugin-tools, runtime-deps cascades, etc). On this Huorong box the
+per-call cost balloons because each call re-walks the same set of
+manifest files.
+
+Added a process-level `Map<string, InstalledPluginIndex>` keyed by
+`{ workspaceDir, stateDir, pluginIndexFilePath, policyHash, installRecords-hash }`.
+- `loadInstalledPluginIndex` checks the cache first and stores the built
+  index on miss.
+- `refreshInstalledPluginIndex` always rebuilds (preserves the
+  "force refresh" contract) but writes the fresh index back into the
+  cache so subsequent loads are warm.
+- Cache is bypassed entirely when callers supply mutable accumulators
+  (`candidates`, `diagnostics`), a non-default `env`, or a custom `now`.
+  This is what every existing test does (they pass `candidates: [...]`),
+  so test isolation is preserved.
+- Exported `clearInstalledPluginIndexCache()` for surgical eviction
+  (matches the `clearBundledPluginMetadataCache` shape).
+
+The cache key uses the existing `resolveInstalledPluginIndexPolicyHash`
+which already canonicalises plugin enable/allow/deny/slots and per-channel
+`enabled` flags — exactly what changes when the user toggles plugins or
+channels in `openclaw.json`. `installRecords` are also hashed, so install
+state changes invalidate too.
+
+What this does **not** fix: `models.list` is still observed at 402 s on
+gateway cold-start (eventLoopP99=288 s). That call goes through
+`ensureOpenClawModelsJson` → provider discovery, a separate cascade that
+dominates first-call latency. Still on the open-follow-ups list above.
+
 ## Open follow-ups
 
 - `ensureOpenClawModelsJson` cold cost (~19 s baseline, much higher on

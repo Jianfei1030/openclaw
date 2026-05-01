@@ -1,6 +1,7 @@
 import type { OpenClawConfig } from "../config/types.js";
 import { resolveCompatibilityHostVersion } from "../version.js";
 import { normalizePluginsConfig, resolveEffectiveEnableState } from "./config-state.js";
+import { hashJson } from "./installed-plugin-index-hash.js";
 import { normalizeInstallRecordMap } from "./installed-plugin-index-install-records.js";
 import {
   resolveCompatRegistryVersion,
@@ -70,16 +71,52 @@ function buildInstalledPluginIndex(
   };
 }
 
+const INSTALLED_PLUGIN_INDEX_CACHE = new Map<string, InstalledPluginIndex>();
+
+export function clearInstalledPluginIndexCache(): void {
+  INSTALLED_PLUGIN_INDEX_CACHE.clear();
+}
+
+function isCacheableLoadParams(params: LoadInstalledPluginIndexParams): boolean {
+  if (params.candidates) return false;
+  if (params.diagnostics) return false;
+  if (params.now) return false;
+  if (params.env && params.env !== process.env) return false;
+  return true;
+}
+
+function buildLoadCacheKey(params: LoadInstalledPluginIndexParams): string {
+  return JSON.stringify({
+    workspaceDir: params.workspaceDir ?? "",
+    stateDir: params.stateDir ?? "",
+    pluginIndexFilePath: params.pluginIndexFilePath ?? "",
+    policy: resolveInstalledPluginIndexPolicyHash(params.config),
+    installRecords: hashJson(normalizeInstallRecordMap(params.installRecords)),
+  });
+}
+
 export function loadInstalledPluginIndex(
   params: LoadInstalledPluginIndexParams = {},
 ): InstalledPluginIndex {
-  return buildInstalledPluginIndex(params);
+  if (!isCacheableLoadParams(params)) {
+    return buildInstalledPluginIndex(params);
+  }
+  const cacheKey = buildLoadCacheKey(params);
+  const cached = INSTALLED_PLUGIN_INDEX_CACHE.get(cacheKey);
+  if (cached) return cached;
+  const result = buildInstalledPluginIndex(params);
+  INSTALLED_PLUGIN_INDEX_CACHE.set(cacheKey, result);
+  return result;
 }
 
 export function refreshInstalledPluginIndex(
   params: RefreshInstalledPluginIndexParams,
 ): InstalledPluginIndex {
-  return buildInstalledPluginIndex({ ...params, refreshReason: params.reason });
+  const result = buildInstalledPluginIndex({ ...params, refreshReason: params.reason });
+  if (isCacheableLoadParams(params)) {
+    INSTALLED_PLUGIN_INDEX_CACHE.set(buildLoadCacheKey(params), result);
+  }
+  return result;
 }
 
 export function listInstalledPluginRecords(
