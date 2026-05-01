@@ -1,6 +1,13 @@
 import type { IncomingMessage } from "node:http";
 import os from "node:os";
 import type { RawData, WebSocket } from "ws";
+
+const __connectTrace = process.env.OPENCLAW_DEBUG_CONNECT_TRACE === "1";
+function __connMark(connId: string, stage: string) {
+  if (__connectTrace) {
+    process.stderr.write(`[connect-trace] conn=${connId} ${stage} t=${Date.now()}\n`);
+  }
+}
 import { getRuntimeConfig } from "../../../config/io.js";
 import {
   getBoundDeviceBootstrapProfile,
@@ -565,6 +572,7 @@ export function attachGatewayWsMessageHandler(params: {
         });
         const device = controlUiAuthPolicy.device;
 
+        __connMark(connId, "before-resolveConnectAuthState");
         let {
           authResult,
           authOk,
@@ -583,6 +591,7 @@ export function attachGatewayWsMessageHandler(params: {
           rateLimiter: authRateLimiter,
           clientIp: browserRateLimitClientIp,
         });
+        __connMark(connId, "after-resolveConnectAuthState");
         const rejectUnauthorized = (failedAuth: GatewayAuthResult) => {
           const { authProvided, canRetryWithDeviceToken, recommendedNextStep } =
             resolveUnauthorizedHandshakeContext({
@@ -785,6 +794,7 @@ export function attachGatewayWsMessageHandler(params: {
           }
         }
 
+        __connMark(connId, "before-resolveConnectAuthDecision");
         ({ authResult, authOk, authMethod } = await resolveConnectAuthDecision({
           state: {
             authResult,
@@ -813,6 +823,7 @@ export function attachGatewayWsMessageHandler(params: {
             }),
           verifyDeviceToken,
         }));
+        __connMark(connId, "after-resolveConnectAuthDecision");
         pairingLocality = resolvePairingLocality({
           connectParams,
           isLocalClient,
@@ -1124,6 +1135,7 @@ export function attachGatewayWsMessageHandler(params: {
           };
 
           const paired = await getPairedDevice(device.id);
+          __connMark(connId, "after-getPairedDevice");
           const isPaired = paired?.publicKey === devicePublicKey;
           if (!isPaired) {
             if (!(skipLocalBackendSelfPairing || skipControlUiPairingForDevice)) {
@@ -1217,12 +1229,15 @@ export function attachGatewayWsMessageHandler(params: {
             // Metadata pinning is approval-bound. Reconnects can update access metadata,
             // but platform/device family must stay on the approved pairing record.
             await updatePairedDeviceMetadata(device.id, clientAccessMetadata);
+            __connMark(connId, "after-updatePairedDeviceMetadata");
           }
         }
 
+        __connMark(connId, "before-ensureDeviceToken");
         const deviceToken = device
           ? await ensureDeviceToken({ deviceId: device.id, role, scopes })
           : null;
+        __connMark(connId, "after-ensureDeviceToken");
         const bootstrapDeviceTokens: Array<{
           deviceToken: string;
           role: string;
@@ -1268,6 +1283,7 @@ export function attachGatewayWsMessageHandler(params: {
         }
 
         if (role === "node") {
+          __connMark(connId, "before-reconcileNodePairing");
           const reconciliation = await reconcileNodePairingOnConnect({
             cfg: getRuntimeConfig(),
             connectParams,
@@ -1282,6 +1298,7 @@ export function attachGatewayWsMessageHandler(params: {
             });
           }
           connectParams.commands = reconciliation.effectiveCommands;
+          __connMark(connId, "after-reconcileNodePairing");
         }
 
         const shouldTrackPresence = !isGatewayCliClient(connectParams.client);
@@ -1467,7 +1484,9 @@ export function attachGatewayWsMessageHandler(params: {
         };
 
         try {
+          __connMark(connId, "before-sendFrame-helloOk");
           await sendFrame({ type: "res", id: frame.id, ok: true, payload: helloOk });
+          __connMark(connId, "after-sendFrame-helloOk");
         } catch (err) {
           setCloseCause("hello-send-failed", { error: formatForLog(err) });
           close();

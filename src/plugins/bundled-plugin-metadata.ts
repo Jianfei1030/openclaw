@@ -49,6 +49,12 @@ export type BundledPluginMetadata = {
   manifest: PluginManifest;
 };
 
+export function clearBundledPluginMetadataCache(): void {
+  BUNDLED_METADATA_CACHE.clear();
+}
+
+const BUNDLED_METADATA_CACHE = new Map<string, readonly BundledPluginMetadata[]>();
+
 function readPackageManifest(pluginDir: string): PackageManifest | undefined {
   const packagePath = path.join(pluginDir, "package.json");
   if (!fs.existsSync(packagePath)) {
@@ -186,7 +192,12 @@ export function listBundledPluginMetadata(params?: {
   const includeChannelConfigs = params?.includeChannelConfigs ?? !RUNNING_FROM_BUILT_ARTIFACT;
   const includeSyntheticChannelConfigs =
     params?.includeSyntheticChannelConfigs ?? includeChannelConfigs;
-  return Object.freeze(
+  const cacheKey = `${rootDir}|${scanDir ?? ""}|${includeChannelConfigs ? 1 : 0}|${includeSyntheticChannelConfigs ? 1 : 0}`;
+  const cached = BUNDLED_METADATA_CACHE.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const result = Object.freeze(
     collectBundledPluginMetadata(
       rootDir,
       includeChannelConfigs,
@@ -194,6 +205,8 @@ export function listBundledPluginMetadata(params?: {
       scanDir,
     ),
   );
+  BUNDLED_METADATA_CACHE.set(cacheKey, result);
+  return result;
 }
 
 export function findBundledPluginMetadataById(
