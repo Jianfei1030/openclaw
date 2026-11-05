@@ -1,0 +1,63 @@
+// OpenClaw MCP 配置示例
+// 复制到 ~/.openclaw/openclaw.json 的对应位置
+
+{
+  "mcp": {
+    "servers": {
+      // Unity MCP (CoplayDev)
+      // 需要先在 Unity 中启动 MCP for Unity → Start Server
+      "unity-mcp": {
+        "url": "http://localhost:8080/mcp",
+        "requestTimeoutMs": 30000
+      },
+
+      // Unreal Engine MCP (UEEditorMCP)
+      // 需要先编译插件并启动 UE 编辑器
+      "ue-mcp": {
+        "command": "python",
+        "args": ["C:/UE/MyProject/Plugins/UEEditorMCP/Python/ue_editor_mcp/server_unified.py"],
+        "cwd": "C:/UE/MyProject"
+      },
+
+      // Maya MCP
+      // 需要先在 Maya 中开启 commandPort 7001
+      "maya-mcp": {
+        "command": "python",
+        "args": ["C:/path/to/maya-bridge/server.py"],
+        "cwd": "C:/path/to/maya-bridge"
+      },
+
+      // 高德地图 MCP
+      // 需要设置 AMAP_MAPS_API_KEY 环境变量
+      "amap": {
+        "command": "uvx",
+        "args": ["amap-mcp-server"],
+        "env": {
+          "AMAP_MAPS_API_KEY": "${AMAP_MAPS_API_KEY}"
+        }
+      },
+
+      // 示例：stdio 方式运行的本地 MCP server
+      "local-server": {
+        "command": "node",
+        "args": ["/path/to/server.js"],
+        "cwd": "/path/to/working/dir"
+      },
+
+      // 示例：带认证的远程 MCP server
+      "remote-server": {
+        "url": "https://mcp.example.com",
+        "headers": {
+          "Authorization": "Bearer ${API_TOKEN}"
+        }
+      },
+
+      // 示例：streamable-http 传输
+      "streaming-server": {
+        "url": "http://localhost:8000/mcp",
+        "transport": "streamable-http",
+        "connectionTimeoutMs": 10000
+      }
+    }
+  }
+}
